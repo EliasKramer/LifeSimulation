@@ -1,0 +1,128 @@
+#pragma kernel UpdateAgents
+
+float pi = 3.1415926535897932384626433832795;
+
+struct Agent
+{
+    float2 position;
+    float angle;
+    float speed;
+    float4 color;
+    int behaviour;
+};
+
+float sizeX;
+float sizeY;
+float deltaTime;
+int agentCount;
+
+RWStructuredBuffer<Agent> agents;
+
+RWTexture2D<float4> Result;
+
+float rand(in float2 uv)
+{
+    return clamp(frac(sin(dot(uv, float2(12.9898, 78.233) * 2.0)) * 43758.5453), 0.0, 1.0);
+}
+float randBetween(in float2 uv, in float min, in float max)
+{
+	return rand(uv) * (max - min) + min;
+}
+
+Agent calculateNewPosition(Agent agent)
+{
+    float2 direction = float2(cos(agent.angle), sin(agent.angle));
+    float2 newPos = agent.position + (direction * agent.speed);
+
+    bool hasToRecalculate = false;
+    
+	if(newPos.x < 0)
+	{
+        agent.angle = 0;
+        hasToRecalculate = true;
+	}
+    if(newPos.x > sizeX)
+    {
+        agent.angle = 3.14159;
+        hasToRecalculate = true;
+	}
+    if(newPos.y < 0)
+	{
+        agent.angle = 3.14159/2;
+        hasToRecalculate = true;
+    }
+    if(newPos.y > sizeY)
+    {
+        agent.angle = 3.14159/2 * 3;
+        hasToRecalculate = true;
+    }
+
+    if(hasToRecalculate)
+	{
+        direction = float2(cos(agent.angle), sin(agent.angle));
+        newPos = agent.position + (direction * agent.speed);
+	}
+    
+    agent.position = newPos;
+	return agent;
+}
+
+[numthreads(128,1,1)]
+void UpdateAgents (uint3 id : SV_DispatchThreadID)
+{
+    Agent agent = agents[id.x];
+    Result[agent.position] = float4(0,0,0,0);
+    
+    float angleDeg = agent.angle * 180 / pi;
+    
+    
+    if(agent.behaviour == 1)
+    {
+        //set random direction
+        float randomValue = randBetween(agent.position * deltaTime, -15, 15); 
+        angleDeg += randomValue * 5;
+        //convert degree to radian
+        agent.angle = angleDeg * pi / 180.0;
+    }
+
+    //if hunter
+    if(agent.behaviour == 2)
+    {
+        float leastDistance = 1000000;
+        for(int i = 0; i < agentCount; i++)
+	    {
+            //if other is fleeing
+		    Agent otherAgent = agents[i];
+            
+            if(otherAgent.behaviour == 1)
+            {
+                /*
+		        if(otherAgent.position.x == agent.position.x &&
+                    otherAgent.position.y == agent.position.y)
+                {
+                    continue;
+                }*/
+
+		        float2 direction = otherAgent.position - agent.position;
+		        float distance = length(direction);
+
+		        if(distance < leastDistance)
+		        {
+                    leastDistance = distance;
+                    //direction to other Agent
+                    float2 dir = normalize(direction);
+                    //convert direction to angle
+                    float angle = atan2(dir.y, dir.x);
+                    //angle = angle * -1;
+                    //set angle to other agent
+                    agent.angle = angle;
+		        }
+            }
+	    }
+    }
+    
+    agent = calculateNewPosition(agent);
+    
+    Result[agent.position] = agent.color;
+    agents[id.x] = agent;
+}
