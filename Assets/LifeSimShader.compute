@@ -1,6 +1,7 @@
 #pragma kernel UpdateAgents
+#pragma kernel Blurr
 
-float pi = 3.1415926535897932384626433832795;
+float pi;
 
 struct Agent
 {
@@ -9,6 +10,7 @@ struct Agent
     float speed;
     float4 color;
     int behaviour;
+    int dead;
 };
 
 float sizeX;
@@ -16,9 +18,22 @@ float sizeY;
 float deltaTime;
 int agentCount;
 
+float randomAngleRange;
+float randomMult;
+
+float blurrMultiplier;
+
 RWStructuredBuffer<Agent> agents;
 
 RWTexture2D<float4> Result;
+
+
+[numthreads(8, 8, 1)]
+void Blurr(uint3 id : SV_DispatchThreadID)
+{
+    
+    Result[id.xy] = Result[id.xy] * blurrMultiplier;
+}
 
 float rand(in float2 uv)
 {
@@ -26,7 +41,7 @@ float rand(in float2 uv)
 }
 float randBetween(in float2 uv, in float min, in float max)
 {
-	return rand(uv) * (max - min) + min;
+    return rand(uv) * (max - min) + min;
 }
 
 Agent calculateNewPosition(Agent agent)
@@ -36,91 +51,107 @@ Agent calculateNewPosition(Agent agent)
 
     bool hasToRecalculate = false;
     
-	if(newPos.x < 0)
-	{
+    if (newPos.x < 0)
+    {
         agent.angle = 0;
         hasToRecalculate = true;
-	}
-    if(newPos.x > sizeX)
+    }
+    if (newPos.x > sizeX)
     {
         agent.angle = 3.14159;
         hasToRecalculate = true;
-	}
-    if(newPos.y < 0)
-	{
-        agent.angle = 3.14159/2;
+    }
+    if (newPos.y < 0)
+    {
+        agent.angle = 3.14159 / 2;
         hasToRecalculate = true;
     }
-    if(newPos.y > sizeY)
+    if (newPos.y > sizeY)
     {
-        agent.angle = 3.14159/2 * 3;
+        agent.angle = 3.14159 / 2 * 3;
         hasToRecalculate = true;
     }
 
-    if(hasToRecalculate)
-	{
+    if (hasToRecalculate)
+    {
         direction = float2(cos(agent.angle), sin(agent.angle));
         newPos = agent.position + (direction * agent.speed);
-	}
+    }
     
     agent.position = newPos;
-	return agent;
+    return agent;
 }
 
-[numthreads(128,1,1)]
-void UpdateAgents (uint3 id : SV_DispatchThreadID)
+bool colorIsSame(float4 color1, float4 color2)
+{
+    return
+        color1.x == color2.x &&
+        color1.y == color2.y &&
+        color1.z == color2.z &&
+        color1.a == color2.a;
+}
+
+[numthreads(1024, 1, 1)]
+void UpdateAgents(uint3 id : SV_DispatchThreadID)
 {
     Agent agent = agents[id.x];
-    Result[agent.position] = float4(0,0,0,0);
-    
-    float angleDeg = agent.angle * 180 / pi;
-    
-    
-    if(agent.behaviour == 1)
+    if (agent.dead == 1)
     {
-        //set random direction
-        float randomValue = randBetween(agent.position * deltaTime, -15, 15); 
-        angleDeg += randomValue * 5;
-        //convert degree to radian
-        agent.angle = angleDeg * pi / 180.0;
+        agent.dead = 2;
+        agents[id.x] = agent;
+        Result[agent.position] = float4(0, 0, 0, 0);
+        return;
     }
-
-    //if hunter
-    if(agent.behaviour == 2)
+    if (agent.dead == 2)
     {
-        float leastDistance = 1000000;
-        for(int i = 0; i < agentCount; i++)
-	    {
-            //if other is fleeing
-		    Agent otherAgent = agents[i];
+        return;
+    }
+    
+    Result[agent.position] = float4(0, 0, 0, 0);
+        
+    float leastDistance = 1000000;
+    for (int i = 0; i < agentCount; i++)
+    {
+        //if other is fleeing
+        Agent otherAgent = agents[i];
             
-            if(otherAgent.behaviour == 1)
+        if (otherAgent.behaviour != agent.behaviour)
+        {
+            float2 direction = otherAgent.position - agent.position;
+            float distance = length(direction);
+
+            if (distance < leastDistance && otherAgent.dead == 0)
             {
-                /*
-		        if(otherAgent.position.x == agent.position.x &&
-                    otherAgent.position.y == agent.position.y)
+                leastDistance = distance;
+                //direction to other Agent
+                float2 dir = normalize(direction);
+                //convert direction to angle
+                float angle = atan2(dir.y, dir.x);
+                if (otherAgent.behaviour == 2 && agent.behaviour == 1)
                 {
-                    continue;
-                }*/
-
-		        float2 direction = otherAgent.position - agent.position;
-		        float distance = length(direction);
-
-		        if(distance < leastDistance)
-		        {
-                    leastDistance = distance;
-                    //direction to other Agent
-                    float2 dir = normalize(direction);
-                    //convert direction to angle
-                    float angle = atan2(dir.y, dir.x);
-                    //angle = angle * -1;
-                    //set angle to other agent
-                    agent.angle = angle;
-		        }
+                    //go in opposite direction - flee from hunter
+                    angle = angle * -1;
+                }
+                //set angle to other agent
+                agent.angle = angle;
             }
-	    }
+            if (otherAgent.behaviour == 1 && agent.behaviour == 2)
+            {
+                if (distance < 100)
+                {
+                    otherAgent.color = float4(0, 0, 1, 1);
+                    otherAgent.dead = 1;
+                    agents[i] = otherAgent;
+                }
+                    //go in the direction - current agent is hunting fleeing prey
+            }
+        }
     }
     
+    //set random direction
+    float randomValue = randBetween(agent.position * deltaTime, -randomAngleRange, randomAngleRange);
+    agent.angle += randomValue * randomMult;
+
     agent = calculateNewPosition(agent);
     
     Result[agent.position] = agent.color;

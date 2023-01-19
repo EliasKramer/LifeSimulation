@@ -1,4 +1,6 @@
 using Assets;
+using System;
+using System.Linq;
 using UnityEngine;
 public class LifeSimCam : MonoBehaviour
 {
@@ -7,8 +9,15 @@ public class LifeSimCam : MonoBehaviour
     
     private RenderTexture renderTexture;
     
-    private const int threads = 128;
-    private int numberOfAgents = threads * 1;
+    private const int threads = 1024;
+    private int numberOfAgents = threads * 16;
+
+    [SerializeField]
+    float randomAngleRange;
+    [SerializeField]
+    float randomMult;
+    [SerializeField]
+    float blurrMultiplier;
 
     public Agent[] agents;
     private ComputeBuffer agentBuffer;
@@ -39,8 +48,6 @@ public class LifeSimCam : MonoBehaviour
             agents[i] = manager.GetRandomAgent();
         }
         agentBuffer = new ComputeBuffer(numberOfAgents, AgentManager.GetSingleAgentByteSize());
-        agentBuffer.SetData(agents);
-        lifeSimShader.SetBuffer(lifeSimShader.FindKernel("UpdateAgents"), "agents", agentBuffer);
     }
 
     private void OnRenderImage(RenderTexture source, RenderTexture destination)
@@ -50,17 +57,40 @@ public class LifeSimCam : MonoBehaviour
     private void FixedUpdate()
     {
         UpdateAgents();
+        Blurr();
     }
+
+    private void Blurr()
+    {
+        int kernel = lifeSimShader.FindKernel("Blurr");
+        lifeSimShader.SetTexture(kernel, "Result", renderTexture);
+        int workgroupsX = Mathf.CeilToInt(Screen.width / 8.0f);
+        int workgroupsY = Mathf.CeilToInt(Screen.height / 8.0f);
+        lifeSimShader.Dispatch(kernel, workgroupsX, workgroupsY, 1);
+    }
+
     private void UpdateAgents()
     {
+        agentBuffer.SetData(agents);
+        lifeSimShader.SetBuffer(lifeSimShader.FindKernel("UpdateAgents"), "agents", agentBuffer);
+
         int kernel = lifeSimShader.FindKernel("UpdateAgents");
         lifeSimShader.SetFloat("sizeX", Screen.width);
         lifeSimShader.SetFloat("sizeY", Screen.height);
+        lifeSimShader.SetFloat("randomAngleRange", randomAngleRange * Mathf.Deg2Rad);
+        lifeSimShader.SetFloat("randomMult", randomMult);
         lifeSimShader.SetFloat("deltaTime", Time.deltaTime);
+        lifeSimShader.SetFloat("blurrMultiplier", blurrMultiplier);
         lifeSimShader.SetInt("agentCount", numberOfAgents);
         lifeSimShader.SetTexture(kernel, "Result", renderTexture);
         int workgroups = Mathf.CeilToInt(numberOfAgents / threads);
         lifeSimShader.Dispatch(kernel, workgroups, 1, 1);
+
+        agentBuffer.GetData(agents);
+
+        Debug.Log("dead: " + agents.Where(x => x.dead == 1).Count());
+        //delete all blue agents
+        //agents = agents.Where(x => x.color.b != 1).ToArray();
     }
     private void OnDestroy()
     {

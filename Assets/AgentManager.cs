@@ -17,14 +17,16 @@ public struct Agent
     public float speed;
     public Color color;
     public AgentBehaviour behaviour;
+    public int dead;
 
-    public Agent(Vector2 position, float angle, float speed, Color color, AgentBehaviour behaviour)
+    public Agent(Vector2 position, float angle, float speed, Color color, AgentBehaviour behaviour, int dead = 0)
     {
         this.position = position;
         this.angle = angle;
         this.speed = speed;
         this.color = color;
         this.behaviour = behaviour;
+        this.dead = dead;
     }
 }
 
@@ -41,25 +43,20 @@ namespace Assets
             Agent fleeingAgent = new Agent(
                     startPos,
                     UnityEngine.Random.Range(0f, Mathf.PI * 2),
-                    2f,
+                    UnityEngine.Random.Range(1f, 2f),
                     Color.green,
                     AgentBehaviour.Flee);
 
             Agent huntingAgent = new Agent(
                     startPos,
                     UnityEngine.Random.Range(0f, Mathf.PI * 2),
-                    .5f,
+                    UnityEngine.Random.Range(1f, 2f),
                     Color.red,
                     AgentBehaviour.Hunt);
 
 
             agents = new List<Agent>()
             {
-                fleeingAgent,
-                fleeingAgent,
-                fleeingAgent,
-                fleeingAgent,
-                fleeingAgent,
                 fleeingAgent,
                 fleeingAgent,
                 fleeingAgent,
@@ -89,7 +86,7 @@ namespace Assets
         }
         public static int GetSingleAgentByteSize()
         {
-            return sizeof(float) * 8 + sizeof(int) * 1;
+            return sizeof(float) * 8 + sizeof(int) * 2;
         }
     }
 }
