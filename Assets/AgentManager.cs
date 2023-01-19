@@ -16,16 +16,31 @@ public struct Agent
     public float angle;
     public float speed;
     public Color color;
+    public float foodCapacity;
+    public float maxFoodCapacity;
     public AgentBehaviour behaviour;
+    public float viewRange;
     public int dead;
 
-    public Agent(Vector2 position, float angle, float speed, Color color, AgentBehaviour behaviour, int dead = 0)
+    public Agent(
+        Vector2 position, 
+        float angle, 
+        float speed, 
+        Color color,
+        float foodCapacity,
+        float maxFoodCapacity,
+        AgentBehaviour behaviour, 
+        float viewRange, 
+        int dead = 0)
     {
         this.position = position;
         this.angle = angle;
         this.speed = speed;
         this.color = color;
+        this.foodCapacity = foodCapacity;
+        this.maxFoodCapacity = maxFoodCapacity;
         this.behaviour = behaviour;
+        this.viewRange = viewRange;
         this.dead = dead;
     }
 }
@@ -45,26 +60,36 @@ namespace Assets
                     UnityEngine.Random.Range(0f, Mathf.PI * 2),
                     UnityEngine.Random.Range(1f, 2f),
                     Color.green,
-                    AgentBehaviour.Flee);
+                    0,
+                    0,
+                    AgentBehaviour.Flee,
+                    UnityEngine.Random.Range(100f, 200f)
+                    );
 
             Agent huntingAgent = new Agent(
                     startPos,
                     UnityEngine.Random.Range(0f, Mathf.PI * 2),
                     UnityEngine.Random.Range(1f, 2f),
                     Color.red,
-                    AgentBehaviour.Hunt);
+                    0,
+                    0,
+                    AgentBehaviour.Hunt,
+                    UnityEngine.Random.Range(100f, 200f)
+                    );
 
 
-            agents = new List<Agent>()
+            agents = new List<Agent>();
+
+            //add 1000 fleeing agents
+            for (int i = 0; i < 1000; i++)
             {
-                fleeingAgent,
-                fleeingAgent,
-                fleeingAgent,
-                fleeingAgent,
-                fleeingAgent,
-                fleeingAgent,
-                huntingAgent
-            };
+                agents.Add(fleeingAgent);
+            }
+
+            for (int i = 0; i < 10; i++)
+            {
+                agents.Add(huntingAgent);
+            }
         }
         public Agent GetRandomAgent()
         {
@@ -77,16 +102,28 @@ namespace Assets
             retVal.position = new Vector2(UnityEngine.Random.Range(0, Screen.width), UnityEngine.Random.Range(0, Screen.height));
 
             retVal.angle = UnityEngine.Random.Range(0f, Mathf.PI * 2);
+            retVal.viewRange = UnityEngine.Random.Range(100f, 200f);
+
+            retVal.foodCapacity = UnityEngine.Random.Range(50f, 100f);
+            retVal.maxFoodCapacity = retVal.foodCapacity;
 
             return retVal;
         }
         public Agent GetCopyOfAgent(Agent agent)
         {
-            return new Agent(agent.position, agent.angle, agent.speed, agent.color, agent.behaviour);
+            return new Agent(
+                agent.position, 
+                agent.angle, 
+                agent.speed, 
+                agent.color,
+                agent.foodCapacity,
+                agent.maxFoodCapacity,
+                agent.behaviour, 
+                agent.viewRange);
         }
         public static int GetSingleAgentByteSize()
         {
-            return sizeof(float) * 8 + sizeof(int) * 2;
+            return sizeof(float) * 11 + sizeof(int) * 2;
         }
     }
 }

@@ -53,10 +53,11 @@ public class LifeSimCam : MonoBehaviour
     private void OnRenderImage(RenderTexture source, RenderTexture destination)
     {
         Graphics.Blit(renderTexture, destination);
-    }   
+    }
     private void FixedUpdate()
     {
         UpdateAgents();
+        KillPrey();
         Blurr();
     }
 
@@ -71,10 +72,10 @@ public class LifeSimCam : MonoBehaviour
 
     private void UpdateAgents()
     {
-        agentBuffer.SetData(agents);
-        lifeSimShader.SetBuffer(lifeSimShader.FindKernel("UpdateAgents"), "agents", agentBuffer);
-
         int kernel = lifeSimShader.FindKernel("UpdateAgents");
+        agentBuffer.SetData(agents);
+        lifeSimShader.SetBuffer(kernel, "agents", agentBuffer);
+
         lifeSimShader.SetFloat("sizeX", Screen.width);
         lifeSimShader.SetFloat("sizeY", Screen.height);
         lifeSimShader.SetFloat("randomAngleRange", randomAngleRange * Mathf.Deg2Rad);
@@ -88,9 +89,20 @@ public class LifeSimCam : MonoBehaviour
 
         agentBuffer.GetData(agents);
 
-        Debug.Log("dead: " + agents.Where(x => x.dead == 1).Count());
+        Debug.Log("dead: " + agents.Where(x => x.dead == 2).Count());
         //delete all blue agents
         //agents = agents.Where(x => x.color.b != 1).ToArray();
+    }
+    private void KillPrey()
+    {
+        int kernel = lifeSimShader.FindKernel("KillPrey");
+        lifeSimShader.SetBuffer(kernel, "agents", agentBuffer);
+        lifeSimShader.SetTexture(kernel, "Result", renderTexture);
+        
+        int workgroups = Mathf.CeilToInt(numberOfAgents / threads);
+        lifeSimShader.Dispatch(kernel, workgroups, 1, 1);
+
+        agentBuffer.GetData(agents);
     }
     private void OnDestroy()
     {

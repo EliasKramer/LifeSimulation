@@ -1,5 +1,6 @@
 #pragma kernel UpdateAgents
 #pragma kernel Blurr
+#pragma kernel KillPrey
 
 float pi;
 
@@ -9,7 +10,10 @@ struct Agent
     float angle;
     float speed;
     float4 color;
+    float foodCapacity;
+    float maxFoodCapacity;
     int behaviour;
+    float viewRange;
     int dead;
 };
 
@@ -28,11 +32,23 @@ RWStructuredBuffer<Agent> agents;
 RWTexture2D<float4> Result;
 
 
+float4 averageColorOfNeighbours(float2 uv)
+{
+    float4 sum = 0;
+    for (int i = -1; i <= 1; i++)
+    {
+        for (int j = -1; j <= 1; j++)
+        {
+            sum += Result[uv + float2(i, j)];
+        }
+    }
+    return sum / 9;
+}
+
 [numthreads(8, 8, 1)]
 void Blurr(uint3 id : SV_DispatchThreadID)
 {
-    
-    Result[id.xy] = Result[id.xy] * blurrMultiplier;
+    Result[id.xy] = averageColorOfNeighbours(id.xy) * blurrMultiplier;
 }
 
 float rand(in float2 uv)
@@ -91,6 +107,11 @@ bool colorIsSame(float4 color1, float4 color2)
         color1.a == color2.a;
 }
 
+bool agentIsSame(Agent a, Agent b)
+{
+    return a.position.x == b.position.x && b.position.y == b.position.y;
+}
+
 [numthreads(1024, 1, 1)]
 void UpdateAgents(uint3 id : SV_DispatchThreadID)
 {
@@ -107,53 +128,105 @@ void UpdateAgents(uint3 id : SV_DispatchThreadID)
         return;
     }
     
-    Result[agent.position] = float4(0, 0, 0, 0);
+    //Result[agent.position] = float4(0, 0, 0, 0);
         
-    float leastDistance = 1000000;
+    //default value is the current agent
+    Agent nearestFriend = agent;
+    float distanceNearestFriend = 1000000;
+    float2 directionToNearestFriend = float2(0, 0);
+    
+    //default value is the current agent
+    Agent nearestFoe = agent;
+    float distanceNearestFoe = 1000000;
+    float2 directionToNearestFoe = float2(0, 0);
+    
     for (int i = 0; i < agentCount; i++)
     {
-        //if other is fleeing
         Agent otherAgent = agents[i];
             
-        if (otherAgent.behaviour != agent.behaviour)
-        {
-            float2 direction = otherAgent.position - agent.position;
-            float distance = length(direction);
+        float2 direction = otherAgent.position - agent.position;
+        float distance = length(direction);
 
-            if (distance < leastDistance && otherAgent.dead == 0)
+        if (distance < agent.viewRange && otherAgent.dead == 0)
+        {
+            if (distance < distanceNearestFoe &&
+                otherAgent.behaviour != agent.behaviour)
             {
-                leastDistance = distance;
-                //direction to other Agent
+                distanceNearestFoe = distance;
+                nearestFoe = otherAgent;
+                directionToNearestFoe = direction;
+                     //direction to other Agent
                 float2 dir = normalize(direction);
-                //convert direction to angle
+                    //convert direction to angle
                 float angle = atan2(dir.y, dir.x);
                 if (otherAgent.behaviour == 2 && agent.behaviour == 1)
                 {
-                    //go in opposite direction - flee from hunter
+                        //go in opposite direction - flee from hunter
                     angle = angle * -1;
                 }
-                //set angle to other agent
                 agent.angle = angle;
             }
-            if (otherAgent.behaviour == 1 && agent.behaviour == 2)
+            if (distance < distanceNearestFriend &&
+                otherAgent.behaviour == agent.behaviour)
             {
-                if (distance < 100)
-                {
-                    otherAgent.color = float4(0, 0, 1, 1);
-                    otherAgent.dead = 1;
-                    agents[i] = otherAgent;
-                }
-                    //go in the direction - current agent is hunting fleeing prey
+                distanceNearestFriend = distance;
+                nearestFriend = otherAgent;
+                directionToNearestFriend = direction;
             }
         }
     }
+    //no foe found in range and a friend is in range
+    if (agentIsSame(agent, nearestFoe) && !agentIsSame(agent, nearestFriend))
+    {
+        float angle = atan2(directionToNearestFriend.y, directionToNearestFriend.x);
+
+        agent.angle = angle;
+    }
     
-    //set random direction
+    //add some randomness to the movement
     float randomValue = randBetween(agent.position * deltaTime, -randomAngleRange, randomAngleRange);
     agent.angle += randomValue * randomMult;
 
+        
     agent = calculateNewPosition(agent);
+    
+    agent.foodCapacity = agent.foodCapacity - agent.speed;
+    
+    if(agent.foodCapacity <= 0 && agent.behaviour == 2)
+    {
+        agent.dead = 1;
+    }
     
     Result[agent.position] = agent.color;
     agents[id.x] = agent;
 }
+
+[numthreads(1024, 1, 1)]
+void KillPrey(uint3 id : SV_DispatchThreadID)
+{
+    Agent agent = agents[id.x];
+    for (int i = 0; i < agentCount; i++)
+    {
+        Agent otherAgent = agents[i];
+        if (agent.foodCapacity >= agent.maxFoodCapacity)
+        {
+            return;
+        }
+        if (otherAgent.behaviour != 1 || agent.behaviour != 2)
+        {
+            continue;
+        }
+        
+        float2 direction = otherAgent.position - agent.position;
+        float distance = length(direction);
+        if (distance < 5)
+        {
+            otherAgent.dead = 1;
+            agents[i] = otherAgent;
+            agent.foodCapacity = agent.foodCapacity + 1;
+        }
+    }
+    agents[id.x] = agent;
+}
+
+//add food for preys
