@@ -86,7 +86,7 @@ namespace Assets
                 agents.Add(fleeingAgent);
             }
 
-            for (int i = 0; i < 10; i++)
+            for (int i = 0; i < 1; i++)
             {
                 agents.Add(huntingAgent);
             }
@@ -107,6 +107,7 @@ namespace Assets
             retVal.foodCapacity = UnityEngine.Random.Range(50f, 100f);
             retVal.maxFoodCapacity = retVal.foodCapacity;
 
+            retVal.speed = UnityEngine.Random.Range(1f, 3f);
             return retVal;
         }
         public Agent GetCopyOfAgent(Agent agent)

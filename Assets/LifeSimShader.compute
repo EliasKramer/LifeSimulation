@@ -116,20 +116,12 @@ bool agentIsSame(Agent a, Agent b)
 void UpdateAgents(uint3 id : SV_DispatchThreadID)
 {
     Agent agent = agents[id.x];
+
     if (agent.dead == 1)
     {
-        agent.dead = 2;
-        agents[id.x] = agent;
-        Result[agent.position] = float4(0, 0, 0, 0);
         return;
     }
-    if (agent.dead == 2)
-    {
-        return;
-    }
-    
-    //Result[agent.position] = float4(0, 0, 0, 0);
-        
+
     //default value is the current agent
     Agent nearestFriend = agent;
     float distanceNearestFriend = 1000000;
@@ -184,19 +176,28 @@ void UpdateAgents(uint3 id : SV_DispatchThreadID)
     }
     
     //add some randomness to the movement
+    
     float randomValue = randBetween(agent.position * deltaTime, -randomAngleRange, randomAngleRange);
-    agent.angle += randomValue * randomMult;
-
-        
-    agent = calculateNewPosition(agent);
     
-    agent.foodCapacity = agent.foodCapacity - agent.speed;
-    
-    if(agent.foodCapacity <= 0 && agent.behaviour == 2)
+    float distanceToFoe = length(directionToNearestFoe);
+    float multiplierForPanic = agent.viewRange - distanceToFoe;
+    float actualMult = randomMult;
+    if (agent.behaviour == 1 && !agentIsSame(agent, nearestFoe) && distanceToFoe < agent.viewRange/1.5)
     {
-        agent.dead = 1;
+        actualMult = multiplierForPanic;
     }
     
+    agent.angle += randomValue * actualMult;
+    agent = calculateNewPosition(agent);
+    
+    
+    //agent.foodCapacity = agent.foodCapacity - agent.speed;
+    
+    /*    
+    if (agent.foodCapacity <= 0 && agent.behaviour == 2)
+    {
+        //agent.dead = 1;
+    }*/
     Result[agent.position] = agent.color;
     agents[id.x] = agent;
 }
@@ -208,25 +209,24 @@ void KillPrey(uint3 id : SV_DispatchThreadID)
     for (int i = 0; i < agentCount; i++)
     {
         Agent otherAgent = agents[i];
-        if (agent.foodCapacity >= agent.maxFoodCapacity)
+        /*if (agent.foodCapacity >= agent.maxFoodCapacity)
         {
-            return;
-        }
-        if (otherAgent.behaviour != 1 || agent.behaviour != 2)
+            //return;
+        }*/
+        if (otherAgent.behaviour == 1 && agent.behaviour == 2 && otherAgent.dead == 0)
         {
-            continue;
-        }
-        
-        float2 direction = otherAgent.position - agent.position;
-        float distance = length(direction);
-        if (distance < 5)
-        {
-            otherAgent.dead = 1;
-            agents[i] = otherAgent;
-            agent.foodCapacity = agent.foodCapacity + 1;
+            float2 direction = otherAgent.position - agent.position;
+            float distance = length(direction);
+            if (distance < 15)
+            {
+                otherAgent.dead = 1;
+                Result[otherAgent.position] = float4(0, 0, 0, 0);
+                agents[i] = otherAgent;
+            //agent.foodCapacity = agent.foodCapacity + 1;
+            }
         }
     }
-    agents[id.x] = agent;
+    //agents[id.x] = agent;
 }
 
 //add food for preys

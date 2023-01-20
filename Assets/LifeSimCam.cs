@@ -10,7 +10,7 @@ public class LifeSimCam : MonoBehaviour
     private RenderTexture renderTexture;
     
     private const int threads = 1024;
-    private int numberOfAgents = threads * 16;
+    private int numberOfAgents = threads * 8;
 
     [SerializeField]
     float randomAngleRange;
@@ -89,12 +89,12 @@ public class LifeSimCam : MonoBehaviour
 
         agentBuffer.GetData(agents);
 
-        Debug.Log("dead: " + agents.Where(x => x.dead == 2).Count());
         //delete all blue agents
         //agents = agents.Where(x => x.color.b != 1).ToArray();
     }
     private void KillPrey()
     {
+        int agentsDeadBefore1 = agents.Where(x => x.dead == 1).Count();
         int kernel = lifeSimShader.FindKernel("KillPrey");
         lifeSimShader.SetBuffer(kernel, "agents", agentBuffer);
         lifeSimShader.SetTexture(kernel, "Result", renderTexture);
@@ -103,6 +103,8 @@ public class LifeSimCam : MonoBehaviour
         lifeSimShader.Dispatch(kernel, workgroups, 1, 1);
 
         agentBuffer.GetData(agents);
+
+        Debug.Log("dead1: " + agents.Where(x => x.dead == 1).Count() + " , dead before: " +  agentsDeadBefore1);
     }
     private void OnDestroy()
     {

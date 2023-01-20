@@ -221,6 +221,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   lifeSimShader: {fileID: 7200000, guid: 6528e6d9c77b7d9488d1d1bdf8f2cae7, type: 3}
-  randomAngleRange: 15
-  randomMult: 3
-  blurrMultiplier: 0.9
+  randomAngleRange: 29.88
+  randomMult: 3.22
+  blurrMultiplier: 0.99
